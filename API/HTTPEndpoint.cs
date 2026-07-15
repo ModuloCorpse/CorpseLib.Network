@@ -1,8 +1,8 @@
-﻿using CorpseLib.Web.Http;
+﻿using CorpseLib.Network.Http;
 
-namespace CorpseLib.Web.API
+namespace CorpseLib.Network.API
 {
-    public class HTTPEndpoint(bool needExactPath) : AHTTPEndpoint(needExactPath)
+    public class HTTPEndpoint(Http.Path path, bool needExactPath) : AHTTPEndpoint(path, needExactPath)
     {
         public delegate Response MethodHandler(Request request);
 

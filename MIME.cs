@@ -1,4 +1,4 @@
-﻿namespace CorpseLib.Web
+﻿namespace CorpseLib.Network
 {
     /// <summary>
     /// Class representing a MIME

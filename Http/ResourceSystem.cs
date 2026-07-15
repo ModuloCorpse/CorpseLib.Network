@@ -1,4 +1,4 @@
-﻿namespace CorpseLib.Web.Http
+﻿namespace CorpseLib.Network.Http
 {
     public class ResourceSystem
     {

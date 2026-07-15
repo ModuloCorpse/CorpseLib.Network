@@ -1,15 +1,15 @@
-﻿using CorpseLib.Web.Http;
+﻿using CorpseLib.Network.Http;
 using System.Reflection;
 
-namespace CorpseLib.Web.API
+namespace CorpseLib.Network.API
 {
-    public class AssemblyResource(bool needExactPath, bool isWebsocket, Assembly? assembly, string assemblyPath, MIME? mime = null) : AEndpoint(needExactPath, true, isWebsocket)
+    public class AssemblyResource(Http.Path path, bool needExactPath, Assembly? assembly, string assemblyPath, MIME? mime = null) : AHTTPEndpoint(path, needExactPath)
     {
         private Assembly? m_Assembly = assembly;
         private readonly MIME? m_MIME = mime;
         private readonly string m_AssemblyPath = assemblyPath;
 
-        public AssemblyResource(bool isWebsocket, Assembly? assembly, string assemblyPath, MIME? mime = null) : this(false, isWebsocket, assembly, assemblyPath, mime) { }
+        public AssemblyResource(Http.Path path, Assembly? assembly, string assemblyPath, MIME? mime = null) : this(path, false, assembly, assemblyPath, mime) { }
 
         private static byte[] ReadFully(Stream input)
         {

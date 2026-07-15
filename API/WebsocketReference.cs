@@ -1,18 +1,31 @@
-﻿using static CorpseLib.Web.API.API;
-using Path = CorpseLib.Web.Http.Path;
+﻿using Path = CorpseLib.Network.Http.Path;
 
-namespace CorpseLib.Web.API
+namespace CorpseLib.Network.API
 {
-    public class WebsocketReference(APIProtocol client, Path path)
+    public class WebsocketReference
     {
-        private readonly APIProtocol m_Client = client;
-        private readonly Path m_Path = path;
+        private readonly API.APIWebSocketProtocol m_Client;
+        private readonly Path m_Path;
+        private readonly string m_ClientID;
 
         public Path Path => m_Path;
-        public string ClientID => m_Client.ID;
+        public string ClientID => m_ClientID;
+
+        internal WebsocketReference(API.APIWebSocketProtocol client, Path path)
+        {
+            m_Client = client;
+            m_Path = path;
+            m_ClientID = Guid.NewGuid().ToString();
+        }
 
         public void Disconnect() => m_Client.Disconnect();
-        public void Reconnect() => m_Client.Reconnect();
-        public void Send(object msg) => m_Client.Send(msg);
+        public void Send(object msg)
+        {
+            string? message = msg.ToString();
+            if (!string.IsNullOrEmpty(message))
+                m_Client.SendToClient(message);
+        }
+
+        public void Reconnect() { /*TODO*/ }
     }
 }

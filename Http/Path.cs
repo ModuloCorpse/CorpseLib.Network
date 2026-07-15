@@ -2,13 +2,14 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
-namespace CorpseLib.Web.Http
+namespace CorpseLib.Network.Http
 {
     public class Path : IEnumerable<string>
     {
         private readonly Dictionary<string, string?> m_Data = [];
         private readonly string[] m_SplittedPath;
         private readonly string m_FullPath;
+        private readonly string m_Fragment;
 
         public string CurrentPath => (m_SplittedPath.Length > 0) ? m_SplittedPath[0] : string.Empty;
         public string FullPath => m_FullPath;
@@ -47,10 +48,11 @@ namespace CorpseLib.Web.Http
             return path.Split('/');
         }
 
-        private Path(string[] paths, Dictionary<string, string?> data)
+        private Path(string[] paths, Dictionary<string, string?> data, string fragment)
         {
             m_SplittedPath = paths;
             m_Data = data;
+            m_Fragment = fragment;
             m_FullPath = GenerateFullPath();
         }
 
@@ -58,23 +60,62 @@ namespace CorpseLib.Web.Http
         {
             m_SplittedPath = [];
             m_FullPath = string.Empty;
+            m_Fragment = string.Empty;
         }
 
         public Path(string path)
         {
             path = CleanStringPath(path);
-            int parametersIdx = path.IndexOf('?');
-            if (parametersIdx < 0)
-                m_SplittedPath = SplitPath(path);
+            int fragmentIdx = path.IndexOf('#');
+            if (fragmentIdx != -1)
+            {
+                m_Fragment = path[(fragmentIdx + 1)..];
+                path = path[..fragmentIdx];
+            }
+            else
+                m_Fragment = string.Empty;
+
+            if (string.IsNullOrEmpty(path))
+                m_SplittedPath = [];
             else
             {
-                string clearedPath = path[..parametersIdx];
-                if (!string.IsNullOrEmpty(clearedPath))
-                    m_SplittedPath = SplitPath(clearedPath);
+
+                int parametersIdx = path.IndexOf('?');
+                if (parametersIdx < 0)
+                    m_SplittedPath = SplitPath(path);
                 else
-                    m_SplittedPath = [];
-                string parameterLine = path[(parametersIdx + 1)..];
-                string[] datas = parameterLine.Split('&');
+                {
+                    string parameterLine = path[(parametersIdx + 1)..];
+                    path = path[..parametersIdx];
+                    if (!string.IsNullOrEmpty(path))
+                        m_SplittedPath = SplitPath(path);
+                    else
+                        m_SplittedPath = [];
+                    string[] datas = parameterLine.Split('&');
+                    foreach (string s in datas)
+                    {
+                        int n = s.IndexOf('=');
+                        if (n >= 0)
+                            AddParameter(s[..n], s[(n + 1)..]);
+                        else
+                            m_Data[s] = null;
+                    }
+                }
+            }
+
+            m_FullPath = GenerateFullPath();
+        }
+
+        public Path(URI uri)
+        {
+            string path = CleanStringPath(uri.Path);
+            if (!string.IsNullOrEmpty(path))
+                m_SplittedPath = SplitPath(path);
+            else
+                m_SplittedPath = [];
+            if (!string.IsNullOrEmpty(uri.Query))
+            {
+                string[] datas = uri.Query.Split('&');
                 foreach (string s in datas)
                 {
                     int n = s.IndexOf('=');
@@ -84,7 +125,8 @@ namespace CorpseLib.Web.Http
                         m_Data[s] = null;
                 }
             }
-            
+
+            m_Fragment = uri.Fragment;
             m_FullPath = GenerateFullPath();
         }
 
@@ -94,7 +136,7 @@ namespace CorpseLib.Web.Http
         {
             if (m_SplittedPath.Length <= 1)
                 return null;
-            return new(m_SplittedPath.Skip(1).ToArray(), m_Data);
+            return new([.. m_SplittedPath.Skip(1)], m_Data, m_Fragment);
         }
 
         public void AddParameter(string key, string value) => m_Data[key] = value;
@@ -110,7 +152,7 @@ namespace CorpseLib.Web.Http
         /// </summary>
         /// <param name="parameterName">Name of the URL parameter to search</param>
         /// <returns>True if the URL parameter exists</returns>
-        public bool HaveParameter(string parameterName) => m_Data.ContainsKey(parameterName);
+        public bool HasParameter(string parameterName) => m_Data.ContainsKey(parameterName);
 
         /// <summary>
         /// Get the URL parameter value of the given parameter
@@ -156,6 +198,13 @@ namespace CorpseLib.Web.Http
                 }
                 ++i;
             }
+
+            if (!string.IsNullOrEmpty(m_Fragment))
+            {
+                builder.Append('#');
+                builder.Append(m_Fragment);
+            }
+
             return builder.ToString();
         }
 
@@ -171,7 +220,7 @@ namespace CorpseLib.Web.Http
             Dictionary<string, string?> duplicatedData = [];
             foreach (var pairA in m_Data)
                 duplicatedData[pairA.Key] = pairA.Value;
-            return new(duplicatedPath, duplicatedData);
+            return new(duplicatedPath, duplicatedData, m_Fragment);
         }
 
         public Path Take(uint count)
@@ -183,7 +232,7 @@ namespace CorpseLib.Web.Http
             string[] duplicatedPath = new string[count];
             for (int i = 0; i < count; ++i)
                 duplicatedPath[i] = m_SplittedPath[i];
-            return new(duplicatedPath, []);
+            return new(duplicatedPath, [], string.Empty);
         }
 
         public Path Duplicate()
@@ -193,7 +242,7 @@ namespace CorpseLib.Web.Http
             Dictionary<string, string?> duplicatedData = [];
             foreach (var pairA in m_Data)
                 duplicatedData[pairA.Key] = pairA.Value;
-            return new(duplicatedPath, duplicatedData);
+            return new(duplicatedPath, duplicatedData, m_Fragment);
         }
 
         public static Path Append(Path a, Path b)
@@ -209,7 +258,12 @@ namespace CorpseLib.Web.Http
                 concatenatedData[pairA.Key] = pairA.Value;
             foreach (var pairB in b.m_Data)
                 concatenatedData[pairB.Key] = pairB.Value;
-            return new(concatenatedPath, concatenatedData);
+
+            string fragment = a.m_Fragment;
+            if (string.IsNullOrEmpty(fragment))
+                fragment = b.m_Fragment;
+
+            return new(concatenatedPath, concatenatedData, fragment);
         }
 
         public Path Append(string b)
@@ -221,7 +275,7 @@ namespace CorpseLib.Web.Http
             string[] concatenatedPath = new string[length + 1];
             m_SplittedPath.CopyTo(concatenatedPath, 0);
             concatenatedPath[length] = b;
-            return new(concatenatedPath, m_Data);
+            return new(concatenatedPath, m_Data, m_Fragment);
         }
 
         public IEnumerator<string> GetEnumerator() => ((IEnumerable<string>)m_SplittedPath).GetEnumerator();

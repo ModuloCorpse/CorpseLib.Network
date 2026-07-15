@@ -1,8 +1,9 @@
-﻿using CorpseLib.Web.Http;
+﻿using CorpseLib.Network.Http;
+using Path = CorpseLib.Network.Http.Path;
 
-namespace CorpseLib.Web.API.Event
+namespace CorpseLib.Network.API.Event
 {
-    public class EventUnregisterEndpoint(EventEndpoint eventEndpoint) : AHTTPEndpoint(false)
+    public class EventUnregisterEndpoint(Path path, EventEndpoint eventEndpoint) : AHTTPEndpoint(path, false)
     {
         private readonly EventEndpoint m_EventEndpoint = eventEndpoint;
 

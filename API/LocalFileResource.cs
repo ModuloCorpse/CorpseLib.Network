@@ -1,8 +1,8 @@
-﻿using CorpseLib.Web.Http;
+﻿using CorpseLib.Network.Http;
 
-namespace CorpseLib.Web.API
+namespace CorpseLib.Network.API
 {
-    public class LocalFileResource(string filePath, MIME? mime = null) : AHTTPEndpoint()
+    public class LocalFileResource(Http.Path path, string filePath, MIME? mime = null) : AHTTPEndpoint(path)
     {
         private readonly MIME? m_MIME = mime;
         private readonly string m_FilePath = filePath;

@@ -1,20 +1,17 @@
-﻿using CorpseLib.Web.Http;
+﻿using Path = CorpseLib.Network.Http.Path;
 
-namespace CorpseLib.Web.API
+namespace CorpseLib.Network.API
 {
     public abstract class AWebsocketEndpoint : AEndpoint
     {
-        protected AWebsocketEndpoint() : base(false, false, true) { }
-        protected AWebsocketEndpoint(bool needExactPath) : base(needExactPath, false, true) { }
+        protected AWebsocketEndpoint(Path path) : base(path) { }
+        protected AWebsocketEndpoint(Path path, bool needExactPath) : base(path, needExactPath) { }
 
-        protected sealed override Response OnGetRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnHeadRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnPostRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnPutRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnDeleteRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnConnectRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnOptionsRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnTraceRequest(Request request) => new(405, "Method Not Allowed");
-        protected sealed override Response OnPatchRequest(Request request) => new(405, "Method Not Allowed");
+        internal void RegisterClient(WebsocketReference wsReference) => OnClientRegistered(wsReference);
+        protected virtual void OnClientRegistered(WebsocketReference wsReference) { }
+        internal void ClientMessage(WebsocketReference wsReference, string message) => OnClientMessage(wsReference, message);
+        protected virtual void OnClientMessage(WebsocketReference wsReference, string message) { }
+        internal void ClientUnregistered(WebsocketReference wsReference) => OnClientUnregistered(wsReference);
+        protected virtual void OnClientUnregistered(WebsocketReference wsReference) { }
     }
 }

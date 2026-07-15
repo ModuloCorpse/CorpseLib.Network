@@ -1,8 +1,9 @@
 ﻿using CorpseLib.DataNotation;
 using CorpseLib.Json;
 using System.Collections.Concurrent;
+using Path = CorpseLib.Network.Http.Path;
 
-namespace CorpseLib.Web.API.Event
+namespace CorpseLib.Network.API.Event
 {
     public class EventEndpoint : AWebsocketEndpoint
     {
@@ -59,8 +60,8 @@ namespace CorpseLib.Web.API.Event
         private readonly ConcurrentDictionary<string, AEventHandler> m_Events = new();
         private readonly ConcurrentDictionary<string, WebsocketReference> m_Clients = new();
 
-        public EventEndpoint() : base() { }
-        public EventEndpoint(bool needExactPath) : base(needExactPath) { }
+        public EventEndpoint(Path path) : base(path) { }
+        public EventEndpoint(Path path, bool needExactPath) : base(path, needExactPath) { }
 
         protected void SendEvent(string id, string type, DataObject data)
         {
@@ -122,7 +123,36 @@ namespace CorpseLib.Web.API.Event
 
         protected virtual OperationResult OnUnregisterToUnknownEvent(string id, string eventType) => new("Unknown event", $"Unknown event {eventType}");
 
-        protected override void OnClientMessage(WebsocketReference wsReference, string message) { }
+        protected override void OnClientMessage(WebsocketReference wsReference, string message)
+        {
+            DataObject dataNode = JsonParser.Parse(message);
+            if (dataNode.TryGet("request", out string? request))
+            {
+                switch (request)
+                {
+                    case "subscribe":
+                    {
+                        if (dataNode.TryGet("event", out string? eventType))
+                        {
+                            OperationResult result = RegisterClient(wsReference.ClientID, eventType!);
+                            if (result)
+                                SendEvent(wsReference.ClientID, "subscribed", new DataObject() { { "event", eventType! } });
+                        }
+                        break;
+                    }
+                    case "unsubscribe":
+                    {
+                        if (dataNode.TryGet("event", out string? eventType))
+                        {
+                            OperationResult result = UnregisterClient(wsReference.ClientID, eventType!);
+                            if (result)
+                                SendEvent(wsReference.ClientID, "unsubscribed", new DataObject() { { "event", eventType! } });
+                        }
+                        break;
+                    }
+                }
+            }
+        }
 
         public bool HaveEvent(string eventType) => m_Events.ContainsKey(eventType);
 

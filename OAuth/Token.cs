@@ -1,4 +1,4 @@
-﻿namespace CorpseLib.Web.OAuth
+﻿namespace CorpseLib.Network.OAuth
 {
     public class Token
     {

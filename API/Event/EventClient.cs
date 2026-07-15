@@ -1,16 +1,22 @@
 ﻿using CorpseLib.DataNotation;
 using CorpseLib.Json;
-using CorpseLib.Network;
+using CorpseLib.Network.WebSocket;
 
-namespace CorpseLib.Web.API.Event
+namespace CorpseLib.Network.API.Event
 {
-    public class EventClient : WebSocketProtocol
+    public class EventClient : AWebSocketProtocol
     {
-        private class EventAPIClientProtocol(EventClient client) : WebSocketProtocol
+        private class EventAPIClientProtocol(EventClient client) : AWebSocketProtocol
         {
             private readonly EventClient m_Client = client;
 
-            protected override void OnWSMessage(string message)
+            public override void OnClose(int status, string message) { }
+
+            public override void OnError(Exception ex) { }
+
+            public override void OnOpen() { }
+
+            public override void HandleMessage(string message)
             {
                 DataObject json = JsonParser.Parse(message);
                 if (json.TryGet("type", out string? type))
@@ -82,23 +88,25 @@ namespace CorpseLib.Web.API.Event
         private readonly Dictionary<string, IEventCanalWrapper> m_AwaitingWrapper = [];
         private readonly Dictionary<string, IEventCanalWrapper> m_CanalManager = [];
 
-        public static EventClient NewClient(string host, int port, bool isSecured = false)
+        public static EventClient? NewClient(string host, int port, bool isSecured = false)
         {
             EventClient eventClient = new();
-            TCPAsyncClient client = new(eventClient, URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Build());
-            client.Start();
+            WebSocket.WebSocketClient? webSocket = WebSocket.WebSocketClient.Connect(URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Build(), eventClient);
+            if (webSocket == null)
+                return null;
             return eventClient;
         }
 
-        public static EventClient NewClient(string host, int port, string path, bool isSecured = false)
+        public static EventClient? NewClient(string host, int port, string path, bool isSecured = false)
         {
             EventClient eventClient = new();
-            TCPAsyncClient client = new(eventClient, URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Path(path).Build());
-            client.Start();
+            WebSocket.WebSocketClient? webSocket = WebSocket.WebSocketClient.Connect(URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Path(path).Build(), eventClient);
+            if (webSocket == null)
+                return null;
             return eventClient;
         }
 
-        protected override void OnWSMessage(string message)
+        public override void HandleMessage(string message)
         {
             DataObject json = JsonParser.Parse(message);
             if (json.TryGet("type", out string? type) && json.TryGet("data", out DataObject? data))
@@ -160,5 +168,9 @@ namespace CorpseLib.Web.API.Event
 
         private void Unsubsribed(string eventType) => m_CanalManager.Remove(eventType);
         public void Unubscribe(string eventType) => Send(JsonParser.NetStr(new DataObject() { { "request", "unsubscribe" }, { "event", eventType } }));
+
+        public override void OnClose(int status, string message) { }
+        public override void OnError(Exception ex) { }
+        public override void OnOpen() { }
     }
 }

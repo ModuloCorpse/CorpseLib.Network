@@ -1,6 +1,8 @@
-﻿using System.Text;
+﻿using System.Collections.Specialized;
+using System.Net;
+using System.Text;
 
-namespace CorpseLib.Web.Http
+namespace CorpseLib.Network.Http
 {
     /// <summary>
     /// An HTTP request
@@ -22,8 +24,43 @@ namespace CorpseLib.Web.Http
         }
 
         private readonly MethodType m_Method;
+        private readonly URI m_URI;
         private readonly Path m_Path;
-        private readonly string m_Version;
+        private readonly Path m_FullPath;
+        private readonly Version m_Version;
+
+        internal Request(HttpListenerRequest request)
+        {
+            m_Method = request.HttpMethod switch
+            {
+                "GET" => MethodType.GET,
+                "HEAD" => MethodType.HEAD,
+                "POST" => MethodType.POST,
+                "PUT" => MethodType.PUT,
+                "DELETE" => MethodType.DELETE,
+                "CONNECT" => MethodType.CONNECT,
+                "OPTIONS" => MethodType.OPTIONS,
+                "TRACE" => MethodType.TRACE,
+                "PATCH" => MethodType.PATCH,
+                _ => MethodType.UNDEFINED
+            };
+            m_URI = URI.Parse(request.Url?.AbsoluteUri ?? string.Empty);
+            m_Path = new(m_URI.Path);
+            m_FullPath = new(m_URI.FullPath);
+            m_Version = new(request.ProtocolVersion);
+            NameValueCollection headers = request.Headers;
+            foreach (string key in headers)
+                base[key] = string.Join("+", headers[key]);
+
+            if (request.HasEntityBody)
+            {
+                using MemoryStream ms = new();
+                request.InputStream.CopyTo(ms);
+                byte[] bytes = ms.ToArray();
+                if (bytes.Length > 0)
+                    SetBody(bytes);
+            }
+        }
 
         /// <summary>
         /// Constructor
@@ -47,10 +84,12 @@ namespace CorpseLib.Web.Http
                 "PATCH" => MethodType.PATCH,
                 _ => MethodType.UNDEFINED
             };
-            m_Version = requestLine[2];
+            m_Version = new(requestLine[2][5..]);
             attributes.RemoveAt(0);
             ParseHeaderFields(attributes);
-            m_Path = new(requestLine[1]);
+            m_URI = URI.Build().Path(requestLine[1]).Build();
+            m_Path = new(m_URI.Path);
+            m_FullPath = new(m_URI.FullPath);
         }
 
         /// <summary>
@@ -59,11 +98,13 @@ namespace CorpseLib.Web.Http
         /// <param name="method">Method of the request</param>
         /// <param name="path">URL targeted by the request</param>
         /// <param name="body">Body of the request</param>
-        public Request(MethodType method, string path, byte[] body)
+        public Request(MethodType method, URI uri, byte[] body)
         {
             m_Method = method;
-            m_Path = new(path);
-            m_Version = "HTTP/1.1";
+            m_URI = uri;
+            m_Path = new(m_URI.Path);
+            m_FullPath = new(m_URI.FullPath);
+            m_Version = new(1, 1);
             SetBody(body);
         }
 
@@ -73,7 +114,7 @@ namespace CorpseLib.Web.Http
         /// <param name="method">Method of the request</param>
         /// <param name="path">URL targeted by the request</param>
         /// <param name="body">Body of the request</param>
-        public Request(MethodType method, string path, string body = "") : this(method, path, Encoding.UTF8.GetBytes(body)) { }
+        public Request(MethodType method, URI uri, string body = "") : this(method, uri, Encoding.UTF8.GetBytes(body)) { }
 
         /// <summary>
         /// Constructor
@@ -81,24 +122,70 @@ namespace CorpseLib.Web.Http
         /// <param name="method">Method of the request</param>
         /// <param name="path">URL targeted by the request</param>
         /// <param name="body">Body of the request</param>
-        public Request(MethodType method, string path)
+        public Request(MethodType method, URI uri)
         {
             m_Method = method;
-            m_Path = new(path);
-            m_Version = "HTTP/1.1";
+            m_URI = uri;
+            m_Path = new(m_URI.Path);
+            m_FullPath = new(m_URI.FullPath);
+            m_Version = new(1, 1);
         }
+
+        internal HttpRequestMessage ToHttpRequestMessage()
+        {
+            HttpRequestMessage request = new((m_Method) switch
+            {
+                Request.MethodType.GET => HttpMethod.Get,
+                Request.MethodType.HEAD => HttpMethod.Head,
+                Request.MethodType.POST => HttpMethod.Post,
+                Request.MethodType.PUT => HttpMethod.Put,
+                Request.MethodType.DELETE => HttpMethod.Delete,
+                Request.MethodType.CONNECT => HttpMethod.Connect,
+                Request.MethodType.OPTIONS => HttpMethod.Options,
+                Request.MethodType.TRACE => HttpMethod.Trace,
+                Request.MethodType.PATCH => HttpMethod.Patch,
+                _ => HttpMethod.Get,
+            }, new Uri(m_URI.ToString()));
+            foreach (var field in Fields)
+            {
+                string key = field.Key;
+                string val = field.Value.ToString() ?? string.Empty;
+
+                if (key.Equals("Content-Type", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (key.Equals("Host", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("Connection", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("Upgrade", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                request.Headers.TryAddWithoutValidation(key, val);
+            }
+
+            if (Body.Length > 0)
+            {
+                request.Content = new ByteArrayContent(RawBody);
+                if (Fields.TryGetValue("Content-Type", out object? value))
+                    request.Content.Headers.TryAddWithoutValidation("Content-Type", value.ToString());
+            }
+
+            return request;
+        }
+
+        private string GetPath() => string.IsNullOrEmpty(m_URI.Path) ? "/" : m_URI.Path;
 
         protected override string GetHeader() => m_Method switch
         {
-            MethodType.GET => $"GET {m_Path} {m_Version}",
-            MethodType.HEAD => $"HEAD {m_Path} {m_Version}",
-            MethodType.POST => $"POST {m_Path} {m_Version}",
-            MethodType.PUT => $"PUT {m_Path} {m_Version}",
-            MethodType.DELETE => $"DELETE {m_Path} {m_Version}",
-            MethodType.CONNECT => $"CONNECT {m_Path} {m_Version}",
-            MethodType.OPTIONS => $"OPTIONS {m_Path} {m_Version}",
-            MethodType.TRACE => $"TRACE {m_Path} {m_Version}",
-            MethodType.PATCH => $"PATCH {m_Path} {m_Version}",
+            MethodType.GET => $"GET {GetPath()} HTTP/{m_Version}",
+            MethodType.HEAD => $"HEAD {GetPath()} HTTP/{m_Version}",
+            MethodType.POST => $"POST {GetPath()} HTTP/{m_Version}",
+            MethodType.PUT => $"PUT {GetPath()} HTTP/{m_Version}",
+            MethodType.DELETE => $"DELETE {GetPath()} HTTP/{m_Version}",
+            MethodType.CONNECT => $"CONNECT {GetPath()} HTTP/{m_Version}",
+            MethodType.OPTIONS => $"OPTIONS {GetPath()} HTTP/{m_Version}",
+            MethodType.TRACE => $"TRACE {GetPath()} HTTP/{m_Version}",
+            MethodType.PATCH => $"PATCH {GetPath()} HTTP/{m_Version}",
             _ => throw new ArgumentException()
         };
         /// <summary>
@@ -106,14 +193,14 @@ namespace CorpseLib.Web.Http
         /// </summary>
         /// <param name="parameterName">Name of the URL parameter to search</param>
         /// <returns>True if the URL parameter exists</returns>
-        public bool HaveParameter(string parameterName) => m_Path.HaveParameter(parameterName);
+        public bool HasParameter(string parameterName) => m_FullPath.HasParameter(parameterName);
 
         /// <summary>
         /// Get the URL parameter value of the given parameter
         /// </summary>
         /// <param name="parameterName">Name of the URL parameter to search</param>
         /// <returns>The value of the URL parameter</returns>
-        public string GetParameter(string parameterName) => m_Path[parameterName];
+        public string GetParameter(string parameterName) => m_FullPath[parameterName];
 
         /// <summary>
         /// Get the URL parameter value of the given parameter if it exist
@@ -121,7 +208,7 @@ namespace CorpseLib.Web.Http
         /// <param name="parameterName">Name of the URL parameter to search</param>
         /// <param name="value">Container for the value of the parameter if found</param>
         /// <returns>True if it found a value to the given parameter</returns>
-        public bool TryGetParameter(string parameterName, out string? value) => m_Path.TryGetParameter(parameterName, out value);
+        public bool TryGetParameter(string parameterName, out string? value) => m_FullPath.TryGetParameter(parameterName, out value);
 
         /// <summary>
         /// Method of the request
@@ -130,11 +217,15 @@ namespace CorpseLib.Web.Http
         /// <summary>
         /// URL targeted by the request
         /// </summary>
+        public URI Uri => m_URI;
+        /// <summary>
+        /// Path of the URL targeted by the request
+        /// </summary>
         public Path Path => m_Path;
         /// <summary>
         /// HTTP version of the request
         /// </summary>
-        public string Version => m_Version;
+        public Version Version => m_Version;
 
         private static readonly string[] separator = ["\r\n"];
     }

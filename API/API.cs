@@ -1,36 +1,76 @@
-﻿using CorpseLib.Network;
-using CorpseLib.Web.Http;
-using static CorpseLib.Web.Http.ResourceSystem;
-using Path = CorpseLib.Web.Http.Path;
+﻿using CorpseLib.Logging;
+using CorpseLib.Network.Http;
+using System.Net;
+using System.Net.WebSockets;
+using static CorpseLib.Network.Http.ResourceSystem;
+using Directory = CorpseLib.Network.Http.ResourceSystem.Directory;
 
-namespace CorpseLib.Web.API
+namespace CorpseLib.Network.API
 {
     public class API
     {
-        public class APIProtocol(API api, string id) : HttpProtocol
+        public static readonly Logger API_DEBUGGER = new("[${d}-${M}-${y} ${h}:${m}:${s}.${ms}] ${log}");
+        public static void StartLogging() => API_DEBUGGER.Start();
+        public static void StopLogging() => API_DEBUGGER.Stop();
+
+        internal class APIWebSocketProtocol(API server, AWebsocketEndpoint endpoint, Http.Path path) : WebSocket.AWebSocketProtocol
         {
-            private readonly API m_API = api;
-            private readonly string m_ID = id;
-            public string ID => m_ID;
-            protected override void OnHTTPRequest(Request request) => Send(m_API.HandleAPIRequest(request));
-            protected override bool AllowWSOpen(Request request) => m_API.CanOpenWebsocket(request);
-            protected override void OnWSOpen(Request request) => m_API.HandleWebsocketOpen(this, request);
-            protected override void OnWSMessage(string message) => m_API.HandleWebsocketMessage(this, message);
-            protected override void OnWSClose(int status, string message) => m_API.HandleWebsocketClose(this);
+            private readonly AWebsocketEndpoint m_Endpoint = endpoint;
+            private readonly Http.Path m_Path = path;
+            private WebsocketReference? m_Reference = null;
+
+            internal void SendToClient(string message) => Send(message);
+
+            public override void OnOpen()
+            {
+                m_Reference = new(this, m_Path);
+                m_Endpoint.RegisterClient(m_Reference);
+                server.Register(m_Reference.ClientID, this);
+            }
+
+            public override void OnClose(int status, string message)
+            {
+                m_Endpoint.ClientUnregistered(m_Reference!);
+                server.Unregister(m_Reference!.ClientID);
+            }
+
+            public override void HandleMessage(string message)
+            {
+                m_Endpoint.ClientMessage(m_Reference!, message);
+            }
+
+            public override void OnError(Exception ex) { }
         }
 
+        private void Register(string clientID, APIWebSocketProtocol webServerWebSocketProtocol)
+        {
+            m_Lock.Enter();
+            m_OpenWebSockets.Add(clientID, webServerWebSocketProtocol);
+            m_Lock.Exit();
+        }
+
+        private void Unregister(string clientID)
+        {
+            m_Lock.Enter();
+            m_OpenWebSockets.Remove(clientID);
+            m_Lock.Exit();
+        }
+
+        private readonly Dictionary<string, APIWebSocketProtocol> m_OpenWebSockets = [];
         private readonly ResourceSystem m_ResourceSystem = new();
-        private readonly Dictionary<string, Http.Path> m_WebsocketClientsPath = [];
-        private readonly TCPAsyncServer m_AsyncServer;
+        private readonly HttpListener m_Listener = new();
+        private readonly Lock m_Lock = new();
+        private readonly int m_Port;
+        private bool m_IsRunning = false;
 
-        public bool IsRunning => m_AsyncServer.IsRunning();
+        public int Port => m_Port;
+        public bool IsRunning => m_IsRunning;
 
-        public API(int port) => m_AsyncServer = new(() => new APIProtocol(this, Guid.NewGuid().ToString().Replace("-", string.Empty)), port);
-
-        public void Start() => m_AsyncServer.Start();
-        public void Stop() => m_AsyncServer.Stop();
-
-        ~API() => m_AsyncServer.Stop();
+        public API(int port)
+        {
+            m_Port = port;
+            m_Listener.Prefixes.Add($"http://localhost:{m_Port}/");
+        }
 
         public void AddEndpoint(string path, Request.MethodType methodType, HTTPEndpoint.MethodHandler methodHandler) => AddEndpoint(new Http.Path(path), methodType, methodHandler);
 
@@ -41,77 +81,132 @@ namespace CorpseLib.Web.API
                 httpEndpoint.SetEndpoint(methodType, methodHandler);
             else
             {
-                HTTPEndpoint newEndpoint = new(true);
+                HTTPEndpoint newEndpoint = new(path, true);
                 newEndpoint.SetEndpoint(methodType, methodHandler);
                 m_ResourceSystem.Add(path, newEndpoint);
             }
         }
 
         public void AddDirectory(Http.Path path, ResourceSystem.Directory directory) => m_ResourceSystem.Add(path, directory);
-        public void AddEndpoint(Http.Path path, AEndpoint endpoint) => m_ResourceSystem.Add(path, endpoint);
+        public void AddEndpoint(AEndpoint endpoint)
+        {
+            m_ResourceSystem.Add(endpoint.Path, endpoint);
+            endpoint.SetAPI(this);
+        }
 
-        internal Response HandleAPIRequest(Request request)
+        public Resource? GetResource(Http.Path path) => m_ResourceSystem.Get(path);
+
+        public void Start()
         {
             try
             {
-                Resource? resource = m_ResourceSystem.Get(request.Path);
-                if (resource != null && resource is AEndpoint endpoint && endpoint.IsHTTPEndpoint)
-                    return endpoint.HandleRequest(request);
-                else if (resource != null && resource is ResourceSystem.Directory directory)
-                {
-                    Path newPath = request.Path.Append(string.Empty);
-                    Response response = new(301, "Moved Permanently");
-                    response["Location"] = newPath.ToString();
-                    return response;
-                }
-                else
-                    return new(404, "Not Found", $"Endpoint {request.Path} does not exist");
-            } catch (Exception e)
+                m_Listener.Start();
+            } catch (Exception ex)
             {
-                return new(500, "Internal Server Error", $"API caught exception: {e.Message}");
-            }
-        }
-
-        internal bool CanOpenWebsocket(Request request)
-        {
-            Resource? resource = m_ResourceSystem.Get(request.Path);
-            return (resource != null && resource is AEndpoint endpoint && endpoint.IsWebsocketEndpoint);
-        }
-
-        internal void HandleWebsocketOpen(APIProtocol client, Request request)
-        {
-            Resource? resource = m_ResourceSystem.Get(request.Path);
-            if (resource != null && resource is AEndpoint endpoint && endpoint.IsWebsocketEndpoint)
-            {
-                endpoint.RegisterClient(new(client, request.Path));
-                m_WebsocketClientsPath[client.ID] = request.Path;
-            }
-            else
-            {
-                client.Send(new Response(400, "Bad Request", "Not a websocket"));
-                client.Disconnect();
+                API_DEBUGGER.Log($"Cannot start server: {ex.Message}");
                 return;
             }
+            API_DEBUGGER.Log($"Server started on port {m_Port}");
+            m_IsRunning = true;
+            Thread serverThread = new(HandleRequest) { IsBackground = true };
+            serverThread.Start();
         }
 
-        internal void HandleWebsocketMessage(APIProtocol client, string message)
+        public void Stop()
         {
-            if (m_WebsocketClientsPath.TryGetValue(client.ID, out Http.Path? path))
+            m_Lock.Enter();
+            foreach (APIWebSocketProtocol protocol in m_OpenWebSockets.Values)
+                protocol.Disconnect();
+            m_OpenWebSockets.Clear();
+            m_Lock.Exit();
+
+            m_IsRunning = false;
+            m_Listener.Stop();
+        }
+
+        private async Task ProcessContext(HttpListenerContext context)
+        {
+            try
             {
-                Resource? resource = m_ResourceSystem.Get(path);
-                if (resource != null && resource is AEndpoint endpoint && endpoint.IsWebsocketEndpoint)
-                    endpoint.ClientMessage(new(client, path), message);
+                HttpListenerRequest httpRequest = context.Request;
+                HttpListenerResponse httpResponse = context.Response;
+
+                Request request = new(httpRequest);
+                Response? response = null;
+
+                API_DEBUGGER.Log("Received : ${0}", request);
+                Resource? resource = m_ResourceSystem.Get(request.Path);
+                if (resource == null)
+                    response = new(404, "Not Found");
+                else
+                {
+                    if (resource is Directory directory)
+                    {
+                        resource = directory.Get(new());
+                        if (resource == null)
+                            response = new(404, "Not Found");
+                    }
+
+                    if (httpRequest.IsWebSocketRequest)
+                    {
+                        AWebsocketEndpoint? websocketEndpoint = null;
+                        if (resource is AWebsocketEndpoint wsEndpoint)
+                            websocketEndpoint = wsEndpoint;
+                        else if (resource is WebEndpoints webEndpoints)
+                            websocketEndpoint = webEndpoints.WebsocketEndpoint;
+
+                        if (websocketEndpoint != null)
+                        {
+                            HttpListenerWebSocketContext wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
+
+                            APIWebSocketProtocol protocol = new(this, websocketEndpoint, request.Path);
+                            _ = WebSocket.WebSocketClient.Connect(wsContext.WebSocket, protocol);
+                            API_DEBUGGER.Log($"Websocket connection established");
+                            return;
+                        }
+                        else
+                            response = new(403, "Forbidden");
+                    }
+                    else
+                    {
+                        AHTTPEndpoint? httpEndpoint = null;
+                        if (resource is AHTTPEndpoint resourceEndpoint)
+                            httpEndpoint = resourceEndpoint;
+                        else if (resource is WebEndpoints webEndpoints)
+                            httpEndpoint = webEndpoints.HTTPEndpoint;
+
+                        if (httpEndpoint != null)
+                            response = httpEndpoint.HandleRequest(request);
+                        else
+                            response = new(403, "Forbidden");
+                    }
+                }
+
+                API_DEBUGGER.Log("Sending : ${0}", response);
+                response?.ToHttpResponseMessage(httpResponse);
+                httpResponse.Close();
+            }
+            catch (Exception ex)
+            {
+                if (m_IsRunning)
+                    API_DEBUGGER.Log($"Server error: {ex.Message}");
             }
         }
 
-        internal void HandleWebsocketClose(APIProtocol client)
+        private void HandleRequest()
         {
-            if (m_WebsocketClientsPath.TryGetValue(client.ID, out Http.Path? path))
+            while (m_IsRunning)
             {
-                Resource? resource = m_ResourceSystem.Get(path);
-                if (resource != null && resource is AEndpoint endpoint && endpoint.IsWebsocketEndpoint)
-                    endpoint.ClientUnregistered(new(client, path));
-                m_WebsocketClientsPath.Remove(client.ID);
+                try
+                {
+                    HttpListenerContext context = m_Listener.GetContext();
+                    Task.Run(async () => await ProcessContext(context));
+                }
+                catch (Exception ex)
+                {
+                    if (m_IsRunning)
+                        API_DEBUGGER.Log($"Server error: {ex.Message}");
+                }
             }
         }
 

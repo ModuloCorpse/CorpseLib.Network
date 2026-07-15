@@ -1,7 +1,7 @@
 ﻿using CorpseLib.Logging;
 using System.Text;
 
-namespace CorpseLib.Web.Http
+namespace CorpseLib.Network.Http
 {
     public abstract class AMessage : ILoggable
     {

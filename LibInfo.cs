@@ -1,4 +1,4 @@
-﻿namespace CorpseLib.Web
+﻿namespace CorpseLib.Network
 {
     public static class LibInfo
     {

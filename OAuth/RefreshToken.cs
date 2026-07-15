@@ -1,13 +1,18 @@
 ﻿using CorpseLib.DataNotation;
+using CorpseLib.Encryption;
 using CorpseLib.Json;
-using CorpseLib.Network;
-using CorpseLib.Web.Http;
+using CorpseLib.Logging;
+using CorpseLib.Network.Http;
 
-namespace CorpseLib.Web.OAuth
+namespace CorpseLib.Network.OAuth
 {
     public class RefreshToken : Token
     {
         public delegate void RefreshEventHandler(Token refreshedToken);
+
+        public static readonly Logger OAUTH_LOGGER = new("[${d}-${M}-${y} ${h}:${m}:${s}.${ms}] ${log}");
+        public static void StartLogging() => OAUTH_LOGGER.Start();
+        public static void StopLogging() => OAUTH_LOGGER.Stop();
 
         private readonly URI m_OAuthURL;
         private readonly string[] m_Scopes;
@@ -53,7 +58,9 @@ namespace CorpseLib.Web.OAuth
         {
             URLRequest oauthRequest = new(m_OAuthURL, Request.MethodType.POST, request);
             oauthRequest.AddContentType(MIME.APPLICATION.X_WWW_FORM_URLENCODED);
+            OAUTH_LOGGER.Log($"=> Sending: {oauthRequest.Request}");
             Response oauthResponse = oauthRequest.Send();
+            OAUTH_LOGGER.Log($"<= Received: {oauthResponse}");
             string responseJsonStr = oauthResponse.Body;
             if (string.IsNullOrWhiteSpace(responseJsonStr))
                 return false;
@@ -82,6 +89,11 @@ namespace CorpseLib.Web.OAuth
                 return true;
             }
             return false;
+        }
+
+        public void Store(LocalVault vault, string key)
+        {
+            vault.Store(key, $"{AccessToken}\n{m_RefreshToken}");
         }
     }
 }
