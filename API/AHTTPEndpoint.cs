@@ -8,30 +8,30 @@ namespace CorpseLib.Network.API
         protected AHTTPEndpoint(Path path) : base(path) { }
         protected AHTTPEndpoint(Path path, bool needExactPath) : base(path, needExactPath) { }
 
-        internal Response HandleRequest(Request request) => OnRequest(request);
+        internal async Task<Response> HandleRequest(Request request) => await OnRequest(request);
 
-        protected virtual Response OnRequest(Request request) => request.Method switch
+        protected virtual async Task<Response> OnRequest(Request request) => request.Method switch
         {
-            Request.MethodType.GET => OnGetRequest(request),
-            Request.MethodType.HEAD => OnHeadRequest(request),
-            Request.MethodType.POST => OnPostRequest(request),
-            Request.MethodType.PUT => OnPutRequest(request),
-            Request.MethodType.DELETE => OnDeleteRequest(request),
-            Request.MethodType.CONNECT => OnConnectRequest(request),
-            Request.MethodType.OPTIONS => OnOptionsRequest(request),
-            Request.MethodType.TRACE => OnTraceRequest(request),
-            Request.MethodType.PATCH => OnPatchRequest(request),
+            Request.MethodType.GET => await OnGetRequest(request),
+            Request.MethodType.HEAD => await OnHeadRequest(request),
+            Request.MethodType.POST => await OnPostRequest(request),
+            Request.MethodType.PUT => await OnPutRequest(request),
+            Request.MethodType.DELETE => await OnDeleteRequest(request),
+            Request.MethodType.CONNECT => await OnConnectRequest(request),
+            Request.MethodType.OPTIONS => await OnOptionsRequest(request),
+            Request.MethodType.TRACE => await OnTraceRequest(request),
+            Request.MethodType.PATCH => await OnPatchRequest(request),
             _ => new(400, "Bad Request")
         };
 
-        protected virtual Response OnGetRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnHeadRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnPostRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnPutRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnDeleteRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnConnectRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnOptionsRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnTraceRequest(Request request) => new(405, "Method Not Allowed");
-        protected virtual Response OnPatchRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnGetRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnHeadRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnPostRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnPutRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnDeleteRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnConnectRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnOptionsRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnTraceRequest(Request request) => new(405, "Method Not Allowed");
+        protected virtual async Task<Response> OnPatchRequest(Request request) => new(405, "Method Not Allowed");
     }
 }

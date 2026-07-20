@@ -19,27 +19,27 @@ namespace CorpseLib.Network.API
             private readonly Http.Path m_Path = path;
             private WebsocketReference? m_Reference = null;
 
-            internal void SendToClient(string message) => Send(message);
+            internal async Task SendToClient(string message) => await Send(message);
 
-            public override void OnOpen()
+            public override async Task OnOpen()
             {
                 m_Reference = new(this, m_Path);
-                m_Endpoint.RegisterClient(m_Reference);
+                await m_Endpoint.RegisterClient(m_Reference);
                 server.Register(m_Reference.ClientID, this);
             }
 
-            public override void OnClose(int status, string message)
+            public override async Task OnClose(int status, string message)
             {
-                m_Endpoint.ClientUnregistered(m_Reference!);
+                await m_Endpoint.ClientUnregistered(m_Reference!);
                 server.Unregister(m_Reference!.ClientID);
             }
 
-            public override void HandleMessage(string message)
+            public override async Task OnMessageReceived(string message)
             {
-                m_Endpoint.ClientMessage(m_Reference!, message);
+                await m_Endpoint.ClientMessage(m_Reference!, message);
             }
 
-            public override void OnError(Exception ex) { }
+            public override async Task OnError(Exception ex) { }
         }
 
         private void Register(string clientID, APIWebSocketProtocol webServerWebSocketProtocol)
@@ -112,11 +112,11 @@ namespace CorpseLib.Network.API
             serverThread.Start();
         }
 
-        public void Stop()
+        public async Task Stop()
         {
             m_Lock.Enter();
             foreach (APIWebSocketProtocol protocol in m_OpenWebSockets.Values)
-                protocol.Disconnect();
+                await protocol.Disconnect();
             m_OpenWebSockets.Clear();
             m_Lock.Exit();
 
@@ -160,7 +160,7 @@ namespace CorpseLib.Network.API
                             HttpListenerWebSocketContext wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
 
                             APIWebSocketProtocol protocol = new(this, websocketEndpoint, request.Path);
-                            _ = WebSocket.WebSocketClient.Connect(wsContext.WebSocket, protocol);
+                            _ = await WebSocket.WebSocketClient.Connect(wsContext.WebSocket, protocol);
                             API_DEBUGGER.Log($"Websocket connection established");
                             return;
                         }
@@ -176,7 +176,7 @@ namespace CorpseLib.Network.API
                             httpEndpoint = webEndpoints.HTTPEndpoint;
 
                         if (httpEndpoint != null)
-                            response = httpEndpoint.HandleRequest(request);
+                            response = await httpEndpoint.HandleRequest(request);
                         else
                             response = new(403, "Forbidden");
                     }

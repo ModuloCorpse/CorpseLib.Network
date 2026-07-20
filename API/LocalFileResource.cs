@@ -7,7 +7,7 @@ namespace CorpseLib.Network.API
         private readonly MIME? m_MIME = mime;
         private readonly string m_FilePath = filePath;
 
-        protected override Response OnGetRequest(Request request)
+        protected override async Task<Response> OnGetRequest(Request request)
         {
             if (File.Exists(m_FilePath))
             {

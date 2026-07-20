@@ -9,7 +9,7 @@ namespace CorpseLib.Network.OAuth
         private readonly Dictionary<string, OAuthRequest> m_StateOperations = [];
         private string m_PageContent = string.Empty;
 
-        protected override Response OnGetRequest(Request request)
+        protected override async Task<Response> OnGetRequest(Request request)
         {
             if (request.TryGetParameter("state", out string? state))
             {

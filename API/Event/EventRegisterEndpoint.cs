@@ -7,7 +7,7 @@ namespace CorpseLib.Network.API.Event
     {
         private readonly EventEndpoint m_EventEndpoint = eventEndpoint;
 
-        protected override Response OnPostRequest(Request request)
+        protected override async Task<Response> OnPostRequest(Request request)
         {
             string id = request.Body;
             if (!string.IsNullOrEmpty(id))

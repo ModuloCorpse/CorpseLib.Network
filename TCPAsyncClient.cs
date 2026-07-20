@@ -10,7 +10,7 @@ namespace CorpseLib.Network
         public TCPAsyncClient(AProtocol protocol, URI url, int id = 0) : base(protocol, url, id) { }
         internal TCPAsyncClient(AProtocol protocol, int id, Socket socket) : base(protocol, id, socket) { }
 
-        private async void AsyncReceive()
+        private async Task AsyncReceive()
         {
             byte[] readBuffer = new byte[1024];
             while (true)
@@ -42,7 +42,7 @@ namespace CorpseLib.Network
 
         protected override void HandleReceivedPacket(object packet) => m_Protocol.TreatPacket(packet);
 
-        private async void ReconnectAsync()
+        private async Task ReconnectAsync()
         {
             uint tryCount = 0;
             var periodicTimer = new PeriodicTimer(Delay);
@@ -64,13 +64,13 @@ namespace CorpseLib.Network
             }
         }
 
-        protected override void HandleReconnect() => ReconnectAsync();
+        protected override async Task HandleReconnect() => await ReconnectAsync();
 
         public override void TestRead(BytesWriter bytesWriter) => TestReceived(bytesWriter);
 
         public override List<object> Read() => [];
 
-        private async void ActionAfterReconnectAsync(Action action)
+        private async Task ActionAfterReconnectAsync(Action action)
         {
             var periodicTimer = new PeriodicTimer(Delay);
             while (await periodicTimer.WaitForNextTickAsync())
@@ -83,7 +83,7 @@ namespace CorpseLib.Network
             }
         }
 
-        protected override void HandleActionAfterReconnect(Action action) => ActionAfterReconnectAsync(action);
+        protected override async Task HandleActionAfterReconnect(Action action) => await ActionAfterReconnectAsync(action);
 
         public bool Start()
         {

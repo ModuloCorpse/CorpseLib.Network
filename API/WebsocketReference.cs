@@ -18,12 +18,12 @@ namespace CorpseLib.Network.API
             m_ClientID = Guid.NewGuid().ToString();
         }
 
-        public void Disconnect() => m_Client.Disconnect();
-        public void Send(object msg)
+        public async Task Disconnect() => await m_Client.Disconnect();
+        public async Task Send(object msg)
         {
             string? message = msg.ToString();
             if (!string.IsNullOrEmpty(message))
-                m_Client.SendToClient(message);
+                await m_Client.SendToClient(message);
         }
 
         public void Reconnect() { /*TODO*/ }

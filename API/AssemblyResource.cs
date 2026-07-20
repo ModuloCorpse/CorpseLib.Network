@@ -18,7 +18,7 @@ namespace CorpseLib.Network.API
             return ms.ToArray();
         }
 
-        protected override Response OnGetRequest(Request request)
+        protected override async Task<Response> OnGetRequest(Request request)
         {
             if (m_Assembly != null)
             {

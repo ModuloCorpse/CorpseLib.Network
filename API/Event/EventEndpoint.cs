@@ -19,14 +19,14 @@ namespace CorpseLib.Network.API.Event
             public bool UnregisterClient(string clientID) => m_RegisteredClients.Remove(clientID);
             public bool IsRegistered(string clientID) => m_RegisteredClients.Contains(clientID);
 
-            protected void Emit(string type, DataObject eventData) => m_Manager.SendEvent([..m_RegisteredClients], type, eventData);
+            protected async Task Emit(string type, DataObject eventData) => await m_Manager.SendEvent([..m_RegisteredClients], type, eventData);
         }
 
         private class EventHandler(EventEndpoint manager, string eventType) : AEventHandler(manager, eventType)
         {
             public void RegisterToCanal(Canal canal) => canal.Register(Trigger);
             public void UnregisterFromCanal(Canal canal) => canal.Unregister(Trigger);
-            public void Trigger() => Emit("event", new DataObject() { { "event", EventType }, { "data", new DataObject() } });
+            public async Task Trigger() => await Emit("event", new DataObject() { { "event", EventType }, { "data", new DataObject() } });
         }
 
         private class EventHandler<T>(EventEndpoint manager, string eventType) : AEventHandler(manager, eventType)
@@ -34,12 +34,12 @@ namespace CorpseLib.Network.API.Event
             public void RegisterToCanal(Canal<T> canal) => canal.Register(Emit);
             public void UnregisterFromCanal(Canal<T> canal) => canal.Unregister(Emit);
 
-            public void Emit(T? data)
+            public async Task Emit(T? data)
             {
                 if (data == null)
-                    Emit("event", new DataObject() { { "event", EventType }, { "data", new DataObject() } });
+                    await Emit("event", new DataObject() { { "event", EventType }, { "data", new DataObject() } });
                 else
-                    Emit("event", new DataObject() { { "event", EventType }, { "data", data } });
+                    await Emit("event", new DataObject() { { "event", EventType }, { "data", data } });
             }
         }
 
@@ -48,12 +48,12 @@ namespace CorpseLib.Network.API.Event
             public void RegisterToCanal(Canal<T> canal) => canal.Register(Emit);
             public void UnregisterFromCanal(Canal<T> canal) => canal.Unregister(Emit);
 
-            public void Emit(DataNode? data)
+            public async Task Emit(DataNode? data)
             {
                 if (data == null)
-                    Emit("event", new DataObject() { { "event", EventType }, { "data", new DataValue() } });
+                    await Emit("event", new DataObject() { { "event", EventType }, { "data", new DataValue() } });
                 else
-                    Emit("event", new DataObject() { { "event", EventType }, { "data", data } });
+                    await Emit("event", new DataObject() { { "event", EventType }, { "data", data } });
             }
         }
 
@@ -63,29 +63,29 @@ namespace CorpseLib.Network.API.Event
         public EventEndpoint(Path path) : base(path) { }
         public EventEndpoint(Path path, bool needExactPath) : base(path, needExactPath) { }
 
-        protected void SendEvent(string id, string type, DataObject data)
+        protected async Task SendEvent(string id, string type, DataObject data)
         {
             if (m_Clients.TryGetValue(id, out WebsocketReference? client))
-                client.Send(JsonParser.NetStr(new DataObject() { { "type", type }, { "data", data } }));
+                await client.Send(JsonParser.NetStr(new DataObject() { { "type", type }, { "data", data } }));
         }
 
-        protected void SendEvent(string[] ids, string type, DataObject data)
+        protected async Task SendEvent(string[] ids, string type, DataObject data)
         {
             string msg = JsonParser.NetStr(new DataObject() { { "type", type }, { "data", data } });
             foreach (string id in ids)
             {
                 if (m_Clients.TryGetValue(id, out WebsocketReference? client))
-                    client.Send(msg);
+                    await client.Send(msg);
             }
         }
 
-        protected override void OnClientRegistered(WebsocketReference wsReference)
+        protected override async Task OnClientRegistered(WebsocketReference wsReference)
         {
             m_Clients[wsReference.ClientID] = wsReference;
-            wsReference.Send(JsonParser.NetStr(new DataObject() { { "type", "welcome" }, { "data", new DataObject() { { "id", wsReference.ClientID } } } }));
+            await wsReference.Send(JsonParser.NetStr(new DataObject() { { "type", "welcome" }, { "data", new DataObject() { { "id", wsReference.ClientID } } } }));
         }
 
-        protected override void OnClientUnregistered(WebsocketReference wsReference)
+        protected override async Task OnClientUnregistered(WebsocketReference wsReference)
         {
             m_Clients.Remove(wsReference.ClientID, out _);
             foreach (var pair in m_Events)
@@ -123,7 +123,7 @@ namespace CorpseLib.Network.API.Event
 
         protected virtual OperationResult OnUnregisterToUnknownEvent(string id, string eventType) => new("Unknown event", $"Unknown event {eventType}");
 
-        protected override void OnClientMessage(WebsocketReference wsReference, string message)
+        protected override async Task OnClientMessage(WebsocketReference wsReference, string message)
         {
             DataObject dataNode = JsonParser.Parse(message);
             if (dataNode.TryGet("request", out string? request))
@@ -136,7 +136,7 @@ namespace CorpseLib.Network.API.Event
                         {
                             OperationResult result = RegisterClient(wsReference.ClientID, eventType!);
                             if (result)
-                                SendEvent(wsReference.ClientID, "subscribed", new DataObject() { { "event", eventType! } });
+                                await SendEvent(wsReference.ClientID, "subscribed", new DataObject() { { "event", eventType! } });
                         }
                         break;
                     }
@@ -146,7 +146,7 @@ namespace CorpseLib.Network.API.Event
                         {
                             OperationResult result = UnregisterClient(wsReference.ClientID, eventType!);
                             if (result)
-                                SendEvent(wsReference.ClientID, "unsubscribed", new DataObject() { { "event", eventType! } });
+                                await SendEvent(wsReference.ClientID, "unsubscribed", new DataObject() { { "event", eventType! } });
                         }
                         break;
                     }

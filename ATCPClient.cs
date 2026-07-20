@@ -114,7 +114,7 @@ namespace CorpseLib.Network
                 m_Monitor.OnOpen();
         }
 
-        protected abstract void HandleActionAfterReconnect(Action action);
+        protected abstract Task HandleActionAfterReconnect(Action action);
 
         private void WaitForReconnection(Action action)
         {
@@ -188,7 +188,7 @@ namespace CorpseLib.Network
             return false;
         }
 
-        protected abstract void HandleReconnect();
+        protected abstract Task HandleReconnect();
 
         public void Reconnect()
         {

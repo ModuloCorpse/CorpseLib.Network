@@ -12,7 +12,7 @@ namespace CorpseLib.Network
 
         public void SetReadTimeout(int milliseconds) => m_ReadTimeout = milliseconds;
 
-        protected override void HandleReconnect()
+        protected override async Task HandleReconnect()
         {
             uint tryCount = 0;
             while (tryCount < MaxNbTry)
@@ -60,10 +60,10 @@ namespace CorpseLib.Network
 
         protected override void HandleReceivedPacket(object packet) => m_Protocol.TreatPacket(packet);
 
-        protected override void HandleActionAfterReconnect(Action action)
+        protected override async Task HandleActionAfterReconnect(Action action)
         {
             while (IsReconnecting())
-                Thread.Sleep(Delay);
+                await Task.Delay(Delay);
             action();
         }
 

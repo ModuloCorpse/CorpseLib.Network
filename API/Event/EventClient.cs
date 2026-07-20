@@ -10,13 +10,13 @@ namespace CorpseLib.Network.API.Event
         {
             private readonly EventClient m_Client = client;
 
-            public override void OnClose(int status, string message) { }
+            public override async Task OnClose(int status, string message) { }
 
-            public override void OnError(Exception ex) { }
+            public override async Task OnError(Exception ex) { }
 
-            public override void OnOpen() { }
+            public override async Task OnOpen() { }
 
-            public override void HandleMessage(string message)
+            public override async Task OnMessageReceived(string message)
             {
                 DataObject json = JsonParser.Parse(message);
                 if (json.TryGet("type", out string? type))
@@ -39,7 +39,7 @@ namespace CorpseLib.Network.API.Event
                         {
                             DataNode? node = json.Get("data");
                             if (node != null && json.TryGet("event", out string? @event))
-                                m_Client.Receive(@event!, node);
+                                await m_Client.Receive(@event!, node);
                             break;
                         }
                     }
@@ -62,51 +62,51 @@ namespace CorpseLib.Network.API.Event
             }
         }
 
-        private interface IEventCanalWrapper
+        private abstract class IEventCanalWrapper
         {
-            public void Emit(DataNode data);
+            public virtual async Task Emit(DataNode data) { }
         }
 
         private class EventCanalWrapper(Canal canal) : IEventCanalWrapper
         {
             private readonly Canal m_Canal = canal;
 
-            public void Emit(DataNode data) => m_Canal.Trigger();
+            public override async Task Emit(DataNode data) => await m_Canal.Trigger();
         }
 
         private class EventCanalWrapper<T>(Canal<T> canal) : IEventCanalWrapper
         {
             private readonly Canal<T> m_Canal = canal;
 
-            public void Emit(DataNode data)
+            public override async Task Emit(DataNode data)
             {
                 if (DataHelper.Cast(data, out T? @event) && @event != null)
-                    m_Canal.Emit(@event);
+                    await m_Canal.Emit(@event);
             }
         }
 
         private readonly Dictionary<string, IEventCanalWrapper> m_AwaitingWrapper = [];
         private readonly Dictionary<string, IEventCanalWrapper> m_CanalManager = [];
 
-        public static EventClient? NewClient(string host, int port, bool isSecured = false)
+        public static async Task<EventClient?> NewClient(string host, int port, bool isSecured = false)
         {
             EventClient eventClient = new();
-            WebSocket.WebSocketClient? webSocket = WebSocket.WebSocketClient.Connect(URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Build(), eventClient);
+            WebSocketClient? webSocket = await WebSocketClient.Connect(URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Build(), eventClient);
             if (webSocket == null)
                 return null;
             return eventClient;
         }
 
-        public static EventClient? NewClient(string host, int port, string path, bool isSecured = false)
+        public static async Task<EventClient?> NewClient(string host, int port, string path, bool isSecured = false)
         {
             EventClient eventClient = new();
-            WebSocket.WebSocketClient? webSocket = WebSocket.WebSocketClient.Connect(URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Path(path).Build(), eventClient);
+            WebSocketClient? webSocket = await WebSocketClient.Connect(URI.Build(isSecured ? "wss" : "ws").Host(host).Port(port).Path(path).Build(), eventClient);
             if (webSocket == null)
                 return null;
             return eventClient;
         }
 
-        public override void HandleMessage(string message)
+        public override async Task OnMessageReceived(string message)
         {
             DataObject json = JsonParser.Parse(message);
             if (json.TryGet("type", out string? type) && json.TryGet("data", out DataObject? data))
@@ -135,17 +135,17 @@ namespace CorpseLib.Network.API.Event
                     {
                         DataNode? node = data!.Get("data");
                         if (node != null && data!.TryGet("event", out string? @event))
-                            Receive(@event!, node);
+                            await Receive(@event!, node);
                         break;
                     }
                 }
             }
         }
 
-        internal void Receive(string eventType, DataNode data)
+        internal async Task Receive(string eventType, DataNode data)
         {
             if (m_CanalManager.TryGetValue(eventType, out IEventCanalWrapper? canalWrapper))
-                canalWrapper.Emit(data);
+                await canalWrapper.Emit(data);
         }
 
         internal void Subsribed(string eventType)
@@ -157,20 +157,20 @@ namespace CorpseLib.Network.API.Event
             }
         }
 
-        private void Subscribe(string eventType, IEventCanalWrapper wrapper)
+        private async Task Subscribe(string eventType, IEventCanalWrapper wrapper)
         {
             m_AwaitingWrapper[eventType] = wrapper;
-            Send(JsonParser.NetStr(new DataObject() { { "request", "subscribe" }, { "event", eventType } }));
+            await Send(JsonParser.NetStr(new DataObject() { { "request", "subscribe" }, { "event", eventType } }));
         }
 
-        public void Subscribe(Canal canal, string eventType) => Subscribe(eventType, new EventCanalWrapper(canal));
-        public void Subscribe<T>(Canal<T> canal, string eventType) => Subscribe(eventType, new EventCanalWrapper<T>(canal));
+        public async Task Subscribe(Canal canal, string eventType) => await Subscribe(eventType, new EventCanalWrapper(canal));
+        public async Task Subscribe<T>(Canal<T> canal, string eventType) => await Subscribe(eventType, new EventCanalWrapper<T>(canal));
 
         private void Unsubsribed(string eventType) => m_CanalManager.Remove(eventType);
-        public void Unubscribe(string eventType) => Send(JsonParser.NetStr(new DataObject() { { "request", "unsubscribe" }, { "event", eventType } }));
+        public async Task Unubscribe(string eventType) => await Send(JsonParser.NetStr(new DataObject() { { "request", "unsubscribe" }, { "event", eventType } }));
 
-        public override void OnClose(int status, string message) { }
-        public override void OnError(Exception ex) { }
-        public override void OnOpen() { }
+        public override async Task OnClose(int status, string message) { }
+        public override async Task OnError(Exception ex) { }
+        public override async Task OnOpen() { }
     }
 }

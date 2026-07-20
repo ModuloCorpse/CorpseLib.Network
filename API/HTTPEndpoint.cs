@@ -32,14 +32,14 @@ namespace CorpseLib.Network.API
             }
         }
 
-        protected override Response OnConnectRequest(Request request) => (m_Connect != null) ? m_Connect(request) : base.OnConnectRequest(request);
-        protected override Response OnDeleteRequest(Request request) => (m_Delete != null) ? m_Delete(request) : base.OnDeleteRequest(request);
-        protected override Response OnGetRequest(Request request) => (m_Get != null) ? m_Get(request) : base.OnGetRequest(request);
-        protected override Response OnHeadRequest(Request request) => (m_Head != null) ? m_Head(request) : base.OnHeadRequest(request);
-        protected override Response OnOptionsRequest(Request request) => (m_Options != null) ? m_Options(request) : base.OnOptionsRequest(request);
-        protected override Response OnPatchRequest(Request request) => (m_Patch != null) ? m_Patch(request) : base.OnPatchRequest(request);
-        protected override Response OnPostRequest(Request request) => (m_Post != null) ? m_Post(request) : base.OnPostRequest(request);
-        protected override Response OnPutRequest(Request request) => (m_Put != null) ? m_Put(request) : base.OnPutRequest(request);
-        protected override Response OnTraceRequest(Request request) => (m_Trace != null) ? m_Trace(request) : base.OnTraceRequest(request);
+        protected override async Task<Response> OnConnectRequest(Request request) => (m_Connect != null) ? m_Connect(request) : await base.OnConnectRequest(request);
+        protected override async Task<Response> OnDeleteRequest(Request request) => (m_Delete != null) ? m_Delete(request) : await base.OnDeleteRequest(request);
+        protected override async Task<Response> OnGetRequest(Request request) => (m_Get != null) ? m_Get(request) : await base.OnGetRequest(request);
+        protected override async Task<Response> OnHeadRequest(Request request) => (m_Head != null) ? m_Head(request) : await base.OnHeadRequest(request);
+        protected override async Task<Response> OnOptionsRequest(Request request) => (m_Options != null) ? m_Options(request) : await base.OnOptionsRequest(request);
+        protected override async Task<Response> OnPatchRequest(Request request) => (m_Patch != null) ? m_Patch(request) : await base.OnPatchRequest(request);
+        protected override async Task<Response> OnPostRequest(Request request) => (m_Post != null) ? m_Post(request) : await base.OnPostRequest(request);
+        protected override async Task<Response> OnPutRequest(Request request) => (m_Put != null) ? m_Put(request) : await base.OnPutRequest(request);
+        protected override async Task<Response> OnTraceRequest(Request request) => (m_Trace != null) ? m_Trace(request) : await base.OnTraceRequest(request);
     }
 }
