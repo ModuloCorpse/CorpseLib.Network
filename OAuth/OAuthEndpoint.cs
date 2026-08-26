@@ -17,7 +17,7 @@ namespace CorpseLib.Network.OAuth
                 {
                     List<string> scopeList = [];
                     if (request.TryGetParameter("scope", out string? scope))
-                        scopeList.AddRange(scope!.Replace("%3A", ":").Split(' '));
+                        scopeList.AddRange(scope!.Replace("%3A", ":").Split('+'));
                     string[] scopes = [.. scopeList];
                     if (request.TryGetParameter("code", out string? token) && tokenOperation.MatchScope(scopes))
                     {

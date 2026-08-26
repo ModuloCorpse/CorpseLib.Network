@@ -11,13 +11,14 @@ namespace CorpseLib.Network.OAuth
         private readonly OAuthEndpoint m_Endpoint = endpoint;
         private readonly AuthenticatorInfo m_AuthenticatorInfo = info;
 
+        public AuthenticatorInfo AuthenticatorInfo => m_AuthenticatorInfo;
+
         public void SetPageContent(string content) => m_Endpoint.SetPageContent(content);
 
         public OperationResult<RefreshToken> ClientCredentials() => new(new(m_AuthenticatorInfo.TokenURI, m_AuthenticatorInfo.PublicKey, m_AuthenticatorInfo.PrivateKey));
 
-        public OperationResult<RefreshToken> AuthorizationCode(string browser = "")
+        public async Task<OperationResult<RefreshToken>> AuthorizationCode(string browser = "")
         {
-            Operation<RefreshToken> tokenOperation = new();
             OAuthRequest request = new(m_AuthenticatorInfo);
             URI oauthURL = m_AuthenticatorInfo.GetRequestURL(request);
             m_Endpoint.RequestToken(request);
@@ -32,9 +33,7 @@ namespace CorpseLib.Network.OAuth
                 myProcess.StartInfo.Arguments = oauthURL.ToString();
             }
             myProcess.Start();
-
-            tokenOperation.Wait();
-            return tokenOperation.Result;
+            return await request.WaitResult();
         }
 
         public void SaveToken(string path, RefreshToken token)

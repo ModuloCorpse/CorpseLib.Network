@@ -8,6 +8,12 @@
 
         public string State => m_State;
 
+        public async Task<OperationResult<RefreshToken>> WaitResult()
+        {
+            await m_RefreshTokenOperation.AsyncWait();
+            return m_RefreshTokenOperation.Result;
+        }
+
         public bool MatchScope(IEnumerable<string> scopes) => m_AuthenticatorInfo.MatchScope(scopes);
         public void SetResult(string token) => m_RefreshTokenOperation.SetResult(new(m_AuthenticatorInfo.TokenURI, m_AuthenticatorInfo.Scopes, m_AuthenticatorInfo.PublicKey, m_AuthenticatorInfo.PrivateKey, token, m_AuthenticatorInfo.RedirectURI.ToString()));
         public void SetError(string error, string description) => m_RefreshTokenOperation.SetError(error, description);
